@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+
+pdfplumber
+python-pptx
+
+chromadb
+openai
+
+pydantic
+python-dotenv
