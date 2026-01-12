@@ -1,2 +1,9 @@
+# Python
+venv/
+__pycache__/
+
+# Environment variables
 .env
-ai/data/chroma
+
+# Chroma
+chroma-data/
