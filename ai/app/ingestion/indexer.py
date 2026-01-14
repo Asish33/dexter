@@ -15,6 +15,7 @@ def index_document(document_id: str, sections: list[dict]):
         chunks = chunk_text(section["text"])
 
         for chunk in chunks:
+            print(f"[DEBUG] Indexing chunk {idx} for doc {document_id}. Size: {len(chunk)} chars")
             collection.add(
                 ids=[f"{document_id}_{idx}"],
                 documents=[chunk],
@@ -25,3 +26,4 @@ def index_document(document_id: str, sections: list[dict]):
                 embeddings=[embed(chunk)]
             )
             idx += 1
+    print(f"[DEBUG] Finished indexing {idx} chunks for {document_id}")

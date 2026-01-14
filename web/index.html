@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dexter - Intelligent Assessment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: 'var(--clerk-color-primary)',
+              'primary-foreground': 'var(--clerk-color-primary-foreground)',
+              danger: 'var(--clerk-color-danger)',
+              success: 'var(--clerk-color-success)',
+              warning: 'var(--clerk-color-warning)',
+              neutral: 'var(--clerk-color-neutral)',
+              background: 'var(--clerk-color-background)',
+              foreground: 'var(--clerk-color-foreground)',
+              input: 'var(--clerk-color-input)',
+              'input-foreground': 'var(--clerk-color-input-foreground)',
+              ring: 'var(--clerk-color-ring)',
+              'muted-foreground': 'var(--clerk-color-muted-foreground)',
+              card: 'var(--clerk-color-card)',
+              'card-foreground': 'var(--clerk-color-card-foreground)',
+              // Shadcn mappings
+              border: 'var(--clerk-color-ring)',
+              secondary: 'var(--clerk-color-input)',
+              'secondary-foreground': 'var(--clerk-color-input-foreground)',
+              destructive: 'var(--clerk-color-danger)',
+              'destructive-foreground': '#FFFFFF',
+              accent: 'var(--clerk-color-input)',
+              'accent-foreground': 'var(--clerk-color-input-foreground)',
+              popover: 'var(--clerk-color-card)',
+              'popover-foreground': 'var(--clerk-color-card-foreground)',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              heading: ['Outfit', 'sans-serif'],
+            },
+            borderRadius: {
+              DEFAULT: 'var(--clerk-border-radius)',
+            },
+            backgroundImage: {
+              'hero-pattern-light': "radial-gradient(circle at 50% 0%, rgba(47, 48, 55, 0.05) 0%, transparent 50%), linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%)",
+              'hero-pattern-dark': "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 50%), linear-gradient(180deg, #030303 0%, #000000 100%)",
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      :root {
+        --clerk-color-primary: #2F3037;
+        --clerk-color-primary-foreground: #FFFFFF;
+        --clerk-color-danger: #EF4444;
+        --clerk-color-success: #22C543;
+        --clerk-color-warning: #F36B16;
+        --clerk-color-neutral: #000000;
+        --clerk-color-foreground: #000000;
+        --clerk-color-muted-foreground: #64748b;
+        --clerk-color-background: #FFFFFF;
+        --clerk-color-card: #FFFFFF;
+        --clerk-color-card-foreground: #000000;
+        --clerk-color-input: #f1f5f9;
+        --clerk-color-input-foreground: #000000;
+        --clerk-color-ring: #E5E7EB;
+        --clerk-color-shimmer: #FFFFFF;
+        --clerk-color-modal-backdrop: #000000;
+        --clerk-border-radius: 0.5rem;
+        --clerk-spacing: 1rem;
+      }
+
+      .dark {
+        --clerk-color-primary: #ffffff;
+        --clerk-color-primary-foreground: #000000;
+        --clerk-color-danger: #f87171;
+        --clerk-color-success: #4ade80;
+        --clerk-color-warning: #fb923c;
+        --clerk-color-neutral: #ffffff;
+        --clerk-color-foreground: #ededed;
+        --clerk-color-muted-foreground: #a1a1aa;
+        --clerk-color-background: #030303; /* Deep Black */
+        --clerk-color-card: #0A0A0A; /* Slightly lighter black for cards */
+        --clerk-color-card-foreground: #ffffff;
+        --clerk-color-input: #171717;
+        --clerk-color-input-foreground: #ffffff;
+        --clerk-color-ring: #262626;
+        --clerk-color-shimmer: #1e293b;
+        --clerk-color-modal-backdrop: #000000;
+      }
+      
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--clerk-color-background);
+        color: var(--clerk-color-foreground);
+        -webkit-font-smoothing: antialiased;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Outfit', sans-serif;
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
+    "three": "https://esm.sh/three@0.160.0",
+    "framer-motion": "https://esm.sh/framer-motion@10.16.4?deps=react@18.2.0,react-dom@18.2.0",
+    "clsx": "https://esm.sh/clsx@2.1.0",
+    "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0",
+    "date-fns": "https://esm.sh/date-fns@3.3.1",
+    "zustand": "https://esm.sh/zustand@4.5.0?deps=react@18.2.0",
+    "zustand/middleware": "https://esm.sh/zustand@4.5.0/middleware?deps=react@18.2.0",
+    "cmdk": "https://esm.sh/cmdk@0.2.1?deps=react@18.2.0,react-dom@18.2.0",
+    "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.0.2?deps=react@18.2.0,react-dom@18.2.0",
+    "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.0.5?deps=react@18.2.0,react-dom@18.2.0",
+    "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.0.7?deps=react@18.2.0,react-dom@18.2.0",
+    "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
+    "zustand/": "https://esm.sh/zustand@^5.0.10/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
