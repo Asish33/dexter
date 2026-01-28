@@ -1,0 +1,69 @@
+import { pgTable, serial, text, integer, timestamp, boolean, varchar } from 'drizzle-orm/pg-core';
+
+// Users table
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  username: varchar('username', { length: 50 }).notNull().unique(),
+  email: varchar('email', { length: 100 }).notNull().unique(),
+  password: text('password'), // Made nullable for Google Auth users
+  googleId: varchar('google_id', { length: 255 }).unique(),
+  refreshToken: text('refresh_token'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Documents table
+export const documents = pgTable('documents', {
+  id: serial('id').primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  content: text('content').notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Quizzes table
+export const quizzes = pgTable('quizzes', {
+  id: serial('id').primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'), // Can be null
+  userId: integer('user_id').references(() => users.id).notNull(),
+  isActive: boolean('is_active').default(false), // Can be null in some contexts
+  maxParticipants: integer('max_participants').default(10), // Can be null in some contexts
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Questions table
+export const questions = pgTable('questions', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => quizzes.id).notNull(),
+  content: text('content').notNull(),
+  type: varchar('type', { length: 20 }).$type<'mcq' | 'tf' | 'short_answer'>().notNull(), // 'mcq', 'tf', 'short_answer'
+  correctAnswer: text('correct_answer').notNull(),
+  options: text('options').array(), // For MCQ options
+  points: integer('points').default(1),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Quiz Attempts table
+export const quizAttempts = pgTable('quiz_attempts', {
+  id: serial('id').primaryKey(),
+  quizId: integer('quiz_id').references(() => quizzes.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  score: integer('score'), // Allow null initially
+  totalScore: integer('total_score').notNull(),
+  completedAt: timestamp('completed_at'), // Allow null until completed
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Answers table
+export const answers = pgTable('answers', {
+  id: serial('id').primaryKey(),
+  attemptId: integer('attempt_id').references(() => quizAttempts.id).notNull(),
+  questionId: integer('question_id').references(() => questions.id).notNull(),
+  content: text('content').notNull(),
+  isCorrect: boolean('is_correct'), // Allow null until evaluated
+  pointsAwarded: integer('points_awarded'), // Allow null until evaluated
+  answeredAt: timestamp('answered_at').defaultNow(),
+});

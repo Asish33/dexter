@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: quiz-platform-db
+    environment:
+      POSTGRES_DB: quiz_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: quiz-platform-redis
+    ports:
+      - "6380:6379"  # Changed to port 6380 to avoid conflicts
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -7,6 +7,7 @@ import Button from "../components/Button";
 import { Logo } from "../components/Logo";
 import CreateQuizPage from "./CreateQuizPage";
 import CalendarPage from "./CalendarPage";
+import { useAuth } from "../contexts/AuthContext";
 import {
     HomeIcon,
     UserIcon,
@@ -31,6 +32,7 @@ import {
 } from "../components/Icons";
 
 export const DashboardPage = () => {
+    const { logout } = useAuth();
     const links = [
         {
             label: "Dashboard",
@@ -66,12 +68,13 @@ export const DashboardPage = () => {
             label: "Logout",
             href: "/",
             icon: <LogoutIcon className="h-5 w-5 flex-shrink-0" />,
+            onClick: logout
         },
     ];
     const [open, setOpen] = useState(false);
 
     return (
-        // Outer Container: Full screen, no padding, background matches sidebar
+
         <div className="flex flex-col md:flex-row h-screen w-full bg-[#f4f5f7] dark:bg-black overflow-hidden transition-colors duration-300">
 
             {/* Sidebar Container: Square, flush left */}
@@ -89,7 +92,7 @@ export const DashboardPage = () => {
                             </div>
                             <div className="flex flex-col gap-2">
                                 {links.map((link, idx) => (
-                                    <SidebarLink key={idx} link={link} />
+                                    <SidebarLink key={idx} link={link} onClick={link.onClick} />
                                 ))}
                             </div>
                         </div>
@@ -121,7 +124,7 @@ export const DashboardPage = () => {
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         {links.map((link, idx) => (
-                                            <SidebarLink key={idx} link={link} />
+                                            <SidebarLink key={idx} link={link} onClick={link.onClick} />
                                         ))}
                                     </div>
                                 </div>
@@ -190,8 +193,19 @@ const DashboardHome = () => {
                     <p className="text-muted-foreground">Overview of your activity and performance.</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="outline" className="gap-2 hidden sm:flex">
+                    <Button
+                        variant="outline"
+                        className="gap-2 hidden sm:flex"
+                        onClick={() => navigate('/join')}
+                    >
                         Join a Quiz
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        className="gap-2 hidden sm:flex"
+                        onClick={() => navigate('/dashboard/host')}
+                    >
+                        Host a Quiz
                     </Button>
                     <Button
                         variant="primary"
@@ -433,6 +447,12 @@ const Reports = () => {
 }
 
 const Profile = () => {
+    const { user } = useAuth();
+
+    if (!user) return <div>Loading...</div>;
+
+    const initials = user.username ? user.username.substring(0, 2).toUpperCase() : 'U';
+
     return (
         <div className="p-6 md:p-10 flex flex-col gap-8 w-full max-w-4xl mx-auto">
             <div>
@@ -444,14 +464,14 @@ const Profile = () => {
                 <div className="flex flex-col items-center gap-4 p-6 border border-gray-200 dark:border-white/5 rounded-2xl w-full md:w-72 bg-white dark:bg-white/5 shadow-sm dark:shadow-none">
                     <div className="relative group cursor-pointer">
                         <div className="w-32 h-32 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-4xl text-muted-foreground border-2 border-dashed border-gray-200 dark:border-white/10 overflow-hidden">
-                            <UserIcon className="w-12 h-12" />
+                            {initials}
                         </div>
                         <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <PencilIcon className="w-6 h-6 text-white" />
                         </div>
                     </div>
                     <div className="text-center">
-                        <h3 className="font-bold text-foreground">Aditi Rao</h3>
+                        <h3 className="font-bold text-foreground">{user.username}</h3>
                         <p className="text-xs text-muted-foreground">Premium Member</p>
                     </div>
                     <Button variant="outline" size="sm" fullWidth className="mt-2">Change Avatar</Button>
@@ -460,18 +480,20 @@ const Profile = () => {
                 <div className="flex-1 w-full space-y-6 bg-white dark:bg-white/5 p-8 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-foreground">First Name</label>
-                            <input type="text" defaultValue="Aditi" className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all focus:bg-white dark:focus:bg-black focus:border-primary/50" />
+                            <label className="text-sm font-medium text-foreground">Username</label>
+                            <input type="text" defaultValue={user.username} className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all focus:bg-white dark:focus:bg-black focus:border-primary/50" />
                         </div>
+                        {/* 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Last Name</label>
                             <input type="text" defaultValue="Rao" className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all focus:bg-white dark:focus:bg-black focus:border-primary/50" />
                         </div>
+                         */}
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">Email Address</label>
                         <div className="relative">
-                            <input type="email" defaultValue="aditi.rao@university.edu" className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all focus:bg-white dark:focus:bg-black focus:border-primary/50" />
+                            <input type="email" defaultValue={user.email} className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all focus:bg-white dark:focus:bg-black focus:border-primary/50" readOnly />
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-green-500 font-medium flex items-center gap-1">
                                 <CheckIcon className="w-3 h-3" /> Verified
                             </div>
@@ -641,6 +663,11 @@ const UsageCard = () => {
 
 const UserAccount = () => {
     const { open, animate } = useSidebar();
+    const { user } = useAuth();
+
+    if (!user) return null;
+
+    const initials = user.username ? user.username.substring(0, 2).toUpperCase() : 'U';
 
     return (
         <div className={cn(
@@ -648,7 +675,7 @@ const UserAccount = () => {
             open ? "hover:bg-white dark:hover:bg-white/5 hover:shadow-sm hover:border-gray-100 dark:hover:border-white/5 border border-transparent" : "justify-center"
         )}>
             <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center text-foreground font-bold text-xs">
-                AR
+                {initials}
             </div>
 
             {open && (
@@ -658,8 +685,8 @@ const UserAccount = () => {
                     className="flex-1 flex items-center justify-between overflow-hidden"
                 >
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-foreground truncate">Aditi Rao</span>
-                        <span className="text-xs text-muted-foreground truncate">Free Plan</span>
+                        <span className="text-sm font-bold text-foreground truncate">{user.username}</span>
+                        <span className="text-xs text-muted-foreground truncate">{user.email}</span>
                     </div>
 
                     <button className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors" title="Switch Account">
