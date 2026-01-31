@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import redisClient from '../config/redis';
 import { RedisQuizService } from '../services/redisQuizService';
 import { db } from '../db';
-import { questions } from '../db/schema';
+import { questions, quizzes } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { APIGatewayService } from '../services/apiGatewayService';
 
@@ -15,7 +15,7 @@ interface QuizSession {
 }
 
 
-const activeConnections = new Map<WebSocket, string>(); 
+const activeConnections = new Map<WebSocket, string>();
 const activeSessions = new Map<string, QuizSession>();
 
 export const setupWebSocket = (wss: WebSocketServer) => {
@@ -94,7 +94,7 @@ const joinQuizSession = async (ws: WebSocket, payload: { sessionId: string; user
         session = {
           id: sessionId,
           participants: [ws], // Will be updated as other participants connect
-          currentQuestionIndex: parseInt(sessionData.currentQuestionIndex || '0') || 0,
+          currentQuestionIndex: parseInt(sessionData.currentQuestionIndex ?? '-1'),
           scores: new Map<string, number>(),
           startTime: sessionData.startTime ? new Date(sessionData.startTime) : undefined,
         };
@@ -131,15 +131,56 @@ const joinQuizSession = async (ws: WebSocket, payload: { sessionId: string; user
     const participantCount = players.length;
     await RedisQuizService.updateParticipantCount(sessionId, participantCount);
 
+    // Check if user is host
+    let isHost = false;
+    const sessionDataForHostCheck = await RedisQuizService.getQuizSession(sessionId);
+    if (sessionDataForHostCheck && sessionDataForHostCheck.quizId) {
+      // We need to fetch the quiz to check ownership. import quizService or use db
+      // Using db directly as we imported schema
+      const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, parseInt(sessionDataForHostCheck.quizId)));
+      if (quiz && quiz.userId === parseInt(userId)) {
+        isHost = true;
+      }
+    }
+
+    let currentQuestionPayload = null;
+    if (session.currentQuestionIndex >= 0) {
+      // Quiz is active, fetch current question
+      const questionsStr = await redisClient.get(`quiz_questions:${sessionId}`);
+      if (questionsStr) {
+        const questions = JSON.parse(questionsStr);
+        console.log(`[DEBUG] Session ${sessionId} active. Index: ${session.currentQuestionIndex}. Questions count: ${questions.length}`);
+        const currentQuestion = questions[session.currentQuestionIndex];
+        if (currentQuestion) {
+          currentQuestionPayload = {
+            id: currentQuestion.id,
+            content: currentQuestion.content,
+            type: currentQuestion.type,
+            options: currentQuestion.options,
+            points: currentQuestion.points
+          };
+        }
+      } else {
+        console.log(`[DEBUG] Session ${sessionId} active but NO questions in Redis!`);
+      }
+    } else {
+      console.log(`[DEBUG] Session ${sessionId} join. Index is ${session.currentQuestionIndex} (waiting state)`);
+    }
+
     // Send success response with initial quiz data
+    const payload = {
+      sessionId,
+      message: 'Successfully joined quiz session',
+      participantCount,
+      currentQuestionIndex: session.currentQuestionIndex,
+      isHost,
+      currentQuestion: currentQuestionPayload
+    };
+    // console.log('[DEBUG] Sending joined_quiz payload:', JSON.stringify(payload, null, 2));
+
     ws.send(JSON.stringify({
       type: 'joined_quiz',
-      payload: {
-        sessionId,
-        message: 'Successfully joined quiz session',
-        participantCount,
-        currentQuestionIndex: session.currentQuestionIndex,
-      }
+      payload
     }));
 
     // Notify other participants
@@ -225,7 +266,7 @@ const handleAnswerSubmission = async (ws: WebSocket, payload: { sessionId: strin
       // Create a new quiz attempt
       const questionsStr = await redisClient.get(`quiz_questions:${sessionId}`);
       const totalQuestions = questionsStr ? JSON.parse(questionsStr).length : 0;
-      const newAttempt = await quizAttemptService.QuizAttemptService.createQuizAttempt(quizId, parseInt(userId), totalQuestions * 10); 
+      const newAttempt = await quizAttemptService.QuizAttemptService.createQuizAttempt(quizId, parseInt(userId), totalQuestions * 10);
       attemptId = newAttempt.id;
     }
 
@@ -321,6 +362,9 @@ const startQuiz = async (sessionId: string) => {
         }
       }));
     });
+
+    // Automatically trigger the first question
+    await nextQuestion(sessionId);
   } catch (error) {
     console.error('Error in startQuiz:', error);
     // Notify participants of error

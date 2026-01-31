@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, timestamp, boolean, varchar, jsonb } from 'drizzle-orm/pg-core';
 
 // Users table
 export const users = pgTable('users', {
@@ -28,8 +28,10 @@ export const quizzes = pgTable('quizzes', {
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description'), // Can be null
   userId: integer('user_id').references(() => users.id).notNull(),
+  graphId: varchar('graph_id', { length: 255 }), // Graph RAG ID
   isActive: boolean('is_active').default(false), // Can be null in some contexts
   maxParticipants: integer('max_participants').default(10), // Can be null in some contexts
+  settings: jsonb('settings'), // Store quiz settings (timer, gameMode, etc.)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

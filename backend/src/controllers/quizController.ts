@@ -1,4 +1,5 @@
 import { type Request, type Response } from 'express';
+import { z } from 'zod';
 import { QuizService } from '../services/quizService';
 import { createQuizSchema } from '../types';
 
@@ -8,7 +9,7 @@ interface AuthRequest extends Request {
 
 export const createQuiz = async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, maxParticipants } = createQuizSchema.parse(req.body);
+    const { title, description, maxParticipants, questions, settings } = createQuizSchema.parse(req.body);
     const userId = req.userId; // User ID from authentication middleware
 
     if (!userId) {
@@ -20,6 +21,8 @@ export const createQuiz = async (req: AuthRequest, res: Response) => {
       description,
       userId,
       maxParticipants: maxParticipants || 10,
+      questions,
+      settings
     });
 
     res.status(201).json({
@@ -28,6 +31,9 @@ export const createQuiz = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error creating quiz:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.issues });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 };

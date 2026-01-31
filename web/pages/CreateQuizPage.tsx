@@ -804,7 +804,7 @@ const CreateQuizPage = () => {
     const navigate = useNavigate();
     const {
         step, sessionId, formData, ingestionStatus, isGenerating,
-        setStep, updateFormData, addLink, addFile, removeLink, removeFile, generateQuestions, updateQuestions
+        setStep, updateFormData, addLink, addFile, removeLink, removeFile, generateQuestions, updateQuestions, saveQuiz
     } = useQuizStore();
 
     const nextStep = () => {
@@ -817,8 +817,14 @@ const CreateQuizPage = () => {
 
     const prevStep = () => setStep(step - 1);
 
-    const finishQuiz = () => {
-        navigate('/dashboard');
+    const finishQuiz = async () => {
+        try {
+            await saveQuiz();
+            // Show success toast here if you like
+            navigate('/dashboard');
+        } catch (error) {
+            alert("Failed to publish quiz. Please try again.");
+        }
     };
 
     return (

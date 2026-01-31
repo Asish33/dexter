@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { API_BASE_URL } from '../services/api/config';
 
 export type Question = {
     id: number;
@@ -10,7 +11,6 @@ export type Question = {
     context_quote?: string;
 };
 
-
 export type FormData = {
     title: string;
     description: string;
@@ -18,15 +18,15 @@ export type FormData = {
     links: string[];
     topic: string;
     difficulty: 'easy' | 'medium' | 'hard';
-    questionCount: number; // Added
-    questionType: 'mcq' | 'true_false' | 'mixed'; // Added
+    questionCount: number;
+    questionType: 'mcq' | 'true_false' | 'mixed';
     questions: Question[];
     settings: {
         timer: number;
         participantLimit: number;
         showLeaderboard: boolean;
         shuffleQuestions: boolean;
-        showTeacherNotes: boolean; // Added
+        showTeacherNotes: boolean;
         gameMode: 'classic' | 'team' | 'speed';
     }
 };
@@ -34,6 +34,7 @@ export type FormData = {
 interface QuizState {
     step: number;
     sessionId: string;
+    graphIds: string[]; // Store graph IDs from ingestion
     formData: FormData;
     ingestionStatus: 'idle' | 'loading' | 'success' | 'error';
     isGenerating: boolean;
@@ -47,12 +48,14 @@ interface QuizState {
     removeFile: (idx: number) => void;
     generateQuestions: () => Promise<void>;
     updateQuestions: (questions: Question[]) => void;
+    saveQuiz: () => Promise<any>;
     reset: () => void;
 }
 
 export const useQuizStore = create<QuizState>((set, get) => ({
     step: 1,
     sessionId: crypto.randomUUID(),
+    graphIds: [],
     ingestionStatus: 'idle',
     isGenerating: false,
     formData: {
@@ -80,7 +83,7 @@ export const useQuizStore = create<QuizState>((set, get) => ({
     updateFormData: (field, value) =>
         set((state) => {
             const newState = { ...state.formData, [field]: value };
-            // Clear questions if dependencies change to trigger regeneration
+            // Clear questions if dependencies change
             if (['title', 'topic', 'difficulty', 'files', 'links', 'questionCount', 'questionType'].includes(field)) {
                 newState.questions = [];
             }
@@ -89,43 +92,69 @@ export const useQuizStore = create<QuizState>((set, get) => ({
 
     addLink: async (url) => {
         set({ ingestionStatus: 'loading' });
-        const { sessionId, formData } = get();
-
         try {
-            const res = await fetch('http://localhost:8000/ingest/url', {
+            const { authService } = await import('../services/api/auth/authService');
+            const token = await authService.getValidToken();
+
+            if (!token) throw new Error("Authentication required");
+
+            const res = await fetch(`${API_BASE_URL}/graph-rag/ingest`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, document_id: sessionId })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ inputType: 'url', value: url })
             });
 
             if (!res.ok) throw new Error("Ingestion failed");
+            const data = await res.json();
+
+            // Store the graph_id
+            const newGraphId = data.data.graph_id;
 
             set((state) => ({
                 formData: { ...state.formData, links: [...state.formData.links, url] },
+                graphIds: [...state.graphIds, newGraphId],
                 ingestionStatus: 'success'
             }));
 
-            // Reset status after a delay so UI can show success tick
             setTimeout(() => set({ ingestionStatus: 'idle' }), 2000);
 
         } catch (e) {
             console.error(e);
             set({ ingestionStatus: 'error' });
-            alert("Failed to read this website. It might be blocked or empty.");
+            alert("Failed to process this link. Please try again.");
         }
     },
 
     addFile: async (file) => {
         set({ ingestionStatus: 'loading' });
-        const { sessionId } = get();
-
         try {
-            // Upload to Cloudinary instead of backend
+            const { authService } = await import('../services/api/auth/authService');
+            const token = await authService.getValidToken();
+
+            if (!token) throw new Error("Authentication required");
+
+            // 1. Upload to Cloudinary
             const { uploadToCloudinary } = await import('../utils/cloudinary');
             const cloudinaryUrl = await uploadToCloudinary(file);
-            
-            // Log the Cloudinary URL to console
             console.log('Cloudinary URL:', cloudinaryUrl);
+
+            // 2. Ingest into Graph RAG (treat as PDF/URL)
+            // Note: The API supports 'pdf' which expects a URL to a PDF
+            const res = await fetch(`${API_BASE_URL}/graph-rag/ingest`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ inputType: 'pdf', value: cloudinaryUrl })
+            });
+
+            if (!res.ok) throw new Error("File ingestion failed");
+            const data = await res.json();
+            const newGraphId = data.data.graph_id;
 
             const fileData = {
                 name: file.name,
@@ -135,89 +164,97 @@ export const useQuizStore = create<QuizState>((set, get) => ({
 
             set((state) => ({
                 formData: { ...state.formData, files: [...state.formData.files, fileData] },
+                graphIds: [...state.graphIds, newGraphId],
                 ingestionStatus: 'success'
             }));
             setTimeout(() => set({ ingestionStatus: 'idle' }), 2000);
 
         } catch (e) {
-            console.error('Cloudinary upload error:', e);
+            console.error('Upload/Ingest error:', e);
             set({ ingestionStatus: 'error' });
-            alert(e instanceof Error ? e.message : 'Failed to upload file to Cloudinary');
+            alert(e instanceof Error ? e.message : 'Failed to process file');
         }
     },
 
     removeLink: (idx) =>
         set((state) => {
             const newLinks = state.formData.links.filter((_, i) => i !== idx);
-            // If no resources left, rotate session ID to clear backend context
-            const shouldReset = newLinks.length === 0 && state.formData.files.length === 0;
             return {
-                sessionId: shouldReset ? crypto.randomUUID() : state.sessionId,
-                formData: {
-                    ...state.formData,
-                    links: newLinks
-                }
+                formData: { ...state.formData, links: newLinks }
             };
         }),
 
     removeFile: (idx) =>
         set((state) => {
             const newFiles = state.formData.files.filter((_, i) => i !== idx);
-            // If no resources left, rotate session ID to clear backend context
-            const shouldReset = newFiles.length === 0 && state.formData.links.length === 0;
             return {
-                sessionId: shouldReset ? crypto.randomUUID() : state.sessionId,
-                formData: {
-                    ...state.formData,
-                    files: newFiles
-                }
+                formData: { ...state.formData, files: newFiles }
             };
         }),
 
     generateQuestions: async () => {
         set({ isGenerating: true });
-        const { sessionId, formData } = get();
+        const { graphIds, formData } = get();
+        let targetGraphIds = [...graphIds];
 
         try {
-            const res = await fetch('http://localhost:8000/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    document_id: sessionId,
-                    difficulty: formData.difficulty,
-                    count: formData.questionCount,
-                    mode: formData.questionType,
-                    options: 4,
-                    topic: formData.topic
-                })
-            });
+            const { authService } = await import('../services/api/auth/authService');
+            const token = await authService.getValidToken();
+            if (!token) throw new Error("Authentication required");
 
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => null);
-                throw new Error(errorData?.detail || "Generation failed");
+            // If text topic is provided, ingest it first (if no other content)
+            if (formData.topic && targetGraphIds.length === 0) {
+                const res = await fetch(`${API_BASE_URL}/graph-rag/ingest`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ inputType: 'topic', value: formData.topic })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    targetGraphIds.push(data.data.graph_id);
+                    set((state) => ({ graphIds: [...state.graphIds, data.data.graph_id] }));
+                }
             }
 
-            const data = await res.json();
+            if (targetGraphIds.length === 0) {
+                throw new Error("Please add a file, link, or topic first!");
+            }
 
-            // Map response to internal format
-            const questions: Question[] = data.questions.map((q: any, i: number) => ({
+            // For now, use the LAST graph ID (most recent) or iterate?
+            // Starting with the most recent one for simplicity
+            const activeGraphId = targetGraphIds[targetGraphIds.length - 1];
+
+            const res = await fetch(`${API_BASE_URL}/graph-rag/generate/${activeGraphId}?count=${formData.questionCount}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error("Generation failed");
+            const resData = await res.json();
+
+            // The API returns { message: ..., data: { mcqs: [] } }
+            const mcqs = resData.data.mcqs;
+
+            const questions: Question[] = mcqs.map((q: any, i: number) => ({
                 id: i + 1,
                 text: q.question,
-                options: q.options ? q.options.map((opt: string, oid: number) => ({
+                options: q.options.map((opt: string, oid: number) => ({
                     id: oid + 1,
                     text: opt,
-                    isCorrect: opt === q.correct_answer
-                })) : [],
+                    isCorrect: opt === q.answer
+                })),
                 answer: q.answer,
-                explanation: q.explanation,
-                source: q.source,
-                context_quote: q.context_quote
+                explanation: q.explanation || "Generated via Graph RAG",
+                source: "Graph Knowledge Base"
             }));
 
             set((state) => ({
                 formData: { ...state.formData, questions },
                 isGenerating: false,
-                step: 3 // auto advance
+                step: 3
             }));
 
         } catch (e: any) {
@@ -230,9 +267,63 @@ export const useQuizStore = create<QuizState>((set, get) => ({
     updateQuestions: (questions) =>
         set((state) => ({ formData: { ...state.formData, questions } })),
 
+    saveQuiz: async () => {
+        set({ ingestionStatus: 'loading' });
+        const { formData } = get();
+        try {
+            const { authService } = await import('../services/api/auth/authService');
+            const token = await authService.getValidToken();
+
+            if (!token) throw new Error("Authentication required");
+
+            // Transform data to match backend schema
+            const payload = {
+                title: formData.title,
+                description: formData.description,
+                maxParticipants: formData.settings.participantLimit,
+                settings: formData.settings,
+                questions: formData.questions.map(q => ({
+                    content: q.text,
+                    type: 'mcq', // Default to 'mcq' as per current frontend logic
+                    correctAnswer: q.answer || "",
+                    options: q.options.map(o => o.text),
+                    points: 10, // Default points
+                    explanation: q.explanation,
+                    source: q.source
+                }))
+            };
+
+            const res = await fetch(`${API_BASE_URL}/quizzes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                console.error("Quiz save error details:", errorData);
+                throw new Error(errorData.error || "Failed to save quiz");
+            }
+
+            set({ ingestionStatus: 'success' });
+            // Optional: You might want to return the saved quiz ID here
+            return await res.json();
+        } catch (e: any) {
+            console.error("Save quiz error:", e);
+            set({ ingestionStatus: 'error' });
+            throw e;
+        } finally {
+            setTimeout(() => set({ ingestionStatus: 'idle' }), 2000);
+        }
+    },
+
     reset: () => set({
         step: 1,
         sessionId: crypto.randomUUID(),
+        graphIds: [],
         ingestionStatus: 'idle',
         isGenerating: false,
         formData: {

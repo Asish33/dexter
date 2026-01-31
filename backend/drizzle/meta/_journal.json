@@ -15,6 +15,20 @@
       "when": 1769576202095,
       "tag": "0001_daily_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769863938401,
+      "tag": "0002_kind_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1769865147539,
+      "tag": "0003_sharp_chameleon",
+      "breakpoints": true
     }
   ]
 }

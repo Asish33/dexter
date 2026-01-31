@@ -13,10 +13,28 @@ export const loginUserSchema = z.object({
 });
 
 // Quiz schemas
+// Quiz schemas
 export const createQuizSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   maxParticipants: z.number().int().positive().optional(),
+  questions: z.array(z.object({
+    content: z.string().min(1),
+    type: z.enum(['mcq', 'tf', 'short_answer']), // Changed to enum to match Zod
+    correctAnswer: z.string().min(1),
+    options: z.array(z.string()).optional(),
+    points: z.number().int().positive().optional(),
+    explanation: z.string().optional(), // Added explanation
+    source: z.string().optional()       // Added source
+  })),
+  settings: z.object({
+    timer: z.number().int().positive(),
+    participantLimit: z.number().int().positive(),
+    showLeaderboard: z.boolean(),
+    shuffleQuestions: z.boolean(),
+    showTeacherNotes: z.boolean(),
+    gameMode: z.enum(['classic', 'team', 'speed'])
+  }).optional()
 });
 
 // Question schemas

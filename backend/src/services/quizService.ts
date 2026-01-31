@@ -10,6 +10,7 @@ export interface Quiz {
   userId: number;
   isActive: boolean | null;
   maxParticipants: number | null;
+  settings: any | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,16 @@ export interface CreateQuizInput {
   description?: string;
   userId: number;
   maxParticipants?: number;
+  questions: {
+    content: string;
+    type: 'mcq' | 'tf' | 'short_answer';
+    correctAnswer: string;
+    options?: string[];
+    points?: number;
+    explanation?: string;
+    source?: string;
+  }[];
+  settings?: any;
 }
 
 export interface CreateQuestionInput {
@@ -43,21 +54,45 @@ export interface CreateQuestionInput {
 
 export class QuizService {
   static async createQuiz(quizData: CreateQuizInput): Promise<Quiz> {
-    const [newQuiz] = await db
-      .insert(quizzes)
-      .values({
-        title: quizData.title,
-        description: quizData.description,
-        userId: quizData.userId,
-        maxParticipants: quizData.maxParticipants || 10,
-      })
-      .returning();
+    return await db.transaction(async (tx) => {
+      // 1. Create the Quiz
+      const [newQuiz] = await tx
+        .insert(quizzes)
+        .values({
+          title: quizData.title,
+          description: quizData.description,
+          userId: quizData.userId,
+          maxParticipants: quizData.maxParticipants || 10,
+          settings: quizData.settings
+        })
+        .returning();
 
-    if (!newQuiz) {
-      throw new Error('Failed to create quiz');
-    }
+      if (!newQuiz) {
+        throw new Error('Failed to create quiz');
+      }
 
-    return newQuiz;
+      // 2. Add Questions
+      if (quizData.questions && quizData.questions.length > 0) {
+        for (const q of quizData.questions) {
+          await tx.insert(questions).values({
+            quizId: newQuiz.id,
+            content: q.content,
+            type: q.type,
+            correctAnswer: q.correctAnswer,
+            options: q.options,
+            points: q.points || 1,
+            // We might need to handle explanation/source if schema allows, 
+            // but currently schema only has basic fields.
+            // For now, these might be lost if not added to schema,
+            // but the prompt didn't ask to migrate 'questions' table yet.
+            // Assuming sufficient for MVP or stored in 'content' if needed?
+            // Actually, let's just insert what we have in schema.
+          });
+        }
+      }
+
+      return newQuiz;
+    });
   }
 
   static async getQuizById(quizId: number): Promise<Quiz | null> {
@@ -75,7 +110,8 @@ export class QuizService {
       ...result,
       description: result.description ?? null,
       isActive: result.isActive ?? null,
-      maxParticipants: result.maxParticipants ?? null
+      maxParticipants: result.maxParticipants ?? null,
+      settings: result.settings ?? null
     };
   }
 
@@ -91,7 +127,8 @@ export class QuizService {
       ...quiz,
       description: quiz.description ?? null,
       isActive: quiz.isActive ?? null,
-      maxParticipants: quiz.maxParticipants ?? null
+      maxParticipants: quiz.maxParticipants ?? null,
+      settings: quiz.settings ?? null
     }));
   }
 

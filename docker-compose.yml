@@ -24,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: quiz-platform-redis
     ports:
-      - "6380:6379"  # Changed to port 6380 to avoid conflicts
+      - "6389:6379"  # Changed to port 6380 to avoid conflicts
     volumes:
       - redis_data:/data
 

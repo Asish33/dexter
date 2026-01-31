@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/Button';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface Option {
-    id: string;
-    text: string;
-}
-
 interface Question {
     id: number;
     content: string;
-    options: Option[];
+    options: string[];
     points: number;
 }
 
@@ -33,40 +28,48 @@ const QuizRoomPage = () => {
     const [feedback, setFeedback] = useState<{ isCorrect: boolean; message: string; explanation?: string } | null>(null);
     const [participantCount, setParticipantCount] = useState(0);
 
-    useEffect(() => {
-        // Demo Mode Check
-        if (sessionId === 'demo') {
-            setStatus('playing');
-            setCurrentQuestion({
-                id: 1,
-                content: "What is the capital of France?",
-                options: [
-                    { id: 'a', text: "London" },
-                    { id: 'b', text: "Berlin" },
-                    { id: 'c', text: "Paris" },
-                    { id: 'd', text: "Madrid" }
-                ],
-                points: 10
-            });
-            setTotalQuestions(5);
-            setParticipantCount(3);
-            return;
-        }
+    const [leaderboard, setLeaderboard] = useState<{ userId: string; score: number }[]>([]);
 
-        // Check if connected, if not, maybe redirect to join? or wait
-        if (!isConnected) {
-            // console.log("Waiting for connection...");
+    const location = useLocation();
+    const [isHost, setIsHost] = useState(location.state?.isHost || false);
+
+    const startQuiz = () => {
+        sendMessage('start_quiz', { sessionId });
+    };
+
+    const nextQuestion = () => {
+        sendMessage('next_question', { sessionId });
+    };
+
+    useEffect(() => {
+        if (isConnected && sessionId && user) {
+            // Check if we need to join (e.g. if we are Host coming from creation, or refresh)
+            // Just always send join_quiz to be safe, backend handles idempotency? 
+            // Better: only if not joined? But how to track?
+            // Simple approach: Send join on connect.
+            sendMessage('join_quiz', { sessionId, userId: user.id.toString() });
         }
-    }, [isConnected, sessionId]);
+    }, [isConnected, sessionId, user]);
 
     useEffect(() => {
         if (lastMessage) {
             if (lastMessage.type === 'joined_quiz') {
-                // Should be already joined if we got here from JoinPage, 
-                // but if user refreshed, we might need to rejoin or checking state
-                // For now assume JoinPage handles the initial join
-                setStatus('waiting');
                 setParticipantCount(lastMessage.payload.participantCount);
+                if (lastMessage.payload.isHost !== undefined) {
+                    setIsHost(lastMessage.payload.isHost);
+                }
+
+                // If existing question provided (late join) or just waiting
+                if (lastMessage.payload.currentQuestion) {
+                    setStatus('playing');
+                    setCurrentQuestion(lastMessage.payload.currentQuestion);
+                    // Also need to set index if provided?
+                    if (lastMessage.payload.currentQuestionIndex !== undefined) {
+                        setQuestionIndex(lastMessage.payload.currentQuestionIndex);
+                    }
+                } else {
+                    setStatus('waiting');
+                }
             }
             else if (lastMessage.type === 'participant_joined') {
                 setParticipantCount(lastMessage.payload.participantCount);
@@ -74,13 +77,6 @@ const QuizRoomPage = () => {
             else if (lastMessage.type === 'quiz_started') {
                 setStatus('playing');
                 setTotalQuestions(lastMessage.payload.totalQuestions);
-                // Maybe the first question comes in 'next_question' separately? 
-                // Or we might need to wait for it.
-                // Backend broadcast 'quiz_started', usually followed by 'next_question' logic from host?
-                // Or does start_quiz auto-trigger first question?
-                // Checking backend: startQuiz broadcasts 'quiz_started'. 
-                // Host needs to trigger 'next_question'. 
-                // Wait, if I am a player, I wait for next_question.
             }
             else if (lastMessage.type === 'next_question') {
                 setStatus('playing');
@@ -90,7 +86,6 @@ const QuizRoomPage = () => {
                 setFeedback(null);
             }
             else if (lastMessage.type === 'answer_submitted') {
-                // This is my own answer result
                 setStatus('feedback');
                 setFeedback({
                     isCorrect: lastMessage.payload.isCorrect,
@@ -103,7 +98,7 @@ const QuizRoomPage = () => {
                 setStatus('finished');
             }
             else if (lastMessage.type === 'scores_update') {
-                // Could update leaderboard here
+                setLeaderboard(lastMessage.payload.scores);
             }
         }
     }, [lastMessage]);
@@ -144,12 +139,23 @@ const QuizRoomPage = () => {
             <div className="flex-1 flex items-center justify-center p-4">
                 <div className="w-full max-w-4xl">
 
+
                     {/* Waiting State */}
                     {status === 'waiting' && (
                         <div className="text-center py-20">
                             <div className="animate-bounce mb-8 text-6xl">⏳</div>
-                            <h2 className="text-3xl font-bold mb-4 font-heading">Waiting for host to start...</h2>
-                            <p className="text-muted-foreground text-lg">You are joined! Sit tight.</p>
+                            <h2 className="text-3xl font-bold mb-4 font-heading">{isHost ? "You are the Host!" : "Waiting for host to start..."}</h2>
+                            <p className="text-muted-foreground text-lg mb-8">{isHost ? "Wait for players to join, then start the quiz." : "You are joined! Sit tight."}</p>
+
+                            {isHost && (
+                                <Button
+                                    size="lg"
+                                    className="px-8 py-4 text-lg rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                                    onClick={startQuiz}
+                                >
+                                    Start Quiz Now 🚀
+                                </Button>
+                            )}
                         </div>
                     )}
 
@@ -163,33 +169,33 @@ const QuizRoomPage = () => {
 
                             {/* Options */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {currentQuestion.options.map((option) => (
+                                {currentQuestion.options.map((option, idx) => (
                                     <button
-                                        key={option.id}
-                                        onClick={() => status === 'playing' && setSelectedOption(option.text)}
-                                        disabled={status !== 'playing'}
+                                        key={idx}
+                                        onClick={() => !isHost && status === 'playing' && setSelectedOption(option)}
+                                        disabled={isHost || status !== 'playing'}
                                         className={cn(
                                             "p-6 rounded-2xl border-2 text-left transition-all duration-200 relative overflow-hidden group",
-                                            selectedOption === option.text
-                                                ? "border-primary bg-primary/5 shadow-lg shadow-primary/20 scale-[1.02]"
-                                                : "border-transparent bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm",
-                                            status === 'feedback' && option.text === selectedOption
+                                            selectedOption === option
+                                                ? "border-primary bg-primary/10 shadow-lg shadow-primary/20 scale-[1.02]"
+                                                : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 shadow-sm",
+                                            status === 'feedback' && option === selectedOption
                                                 ? (feedback?.isCorrect ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10")
                                                 : ""
                                         )}
                                     >
                                         <span className={cn(
                                             "text-lg font-medium",
-                                            selectedOption === option.text ? "text-primary dark:text-white" : "text-foreground"
+                                            selectedOption === option ? "text-primary dark:text-white" : "text-gray-900 dark:text-gray-100"
                                         )}>
-                                            {option.text}
+                                            {option}
                                         </span>
                                     </button>
                                 ))}
                             </div>
 
                             {/* Actions */}
-                            {status === 'playing' && (
+                            {status === 'playing' && !isHost && (
                                 <div className="flex justify-center mt-8">
                                     <Button
                                         size="lg"
@@ -199,6 +205,49 @@ const QuizRoomPage = () => {
                                     >
                                         Submit Answer
                                     </Button>
+                                </div>
+                            )}
+
+                            {/* Host View - Playing State */}
+                            {status === 'playing' && isHost && (
+                                <div className="text-center mt-8 p-6 bg-white/5 rounded-2xl border border-white/10 space-y-6">
+                                    <div className="animate-pulse flex flex-col items-center gap-2">
+                                        <span className="text-4xl">👀</span>
+                                        <h3 className="text-xl font-bold">Spectating Mode</h3>
+                                        <p className="text-muted-foreground">Wait for players to answer...</p>
+                                    </div>
+
+                                    {/* Live Host Leaderboard */}
+                                    {leaderboard.length > 0 && (
+                                        <div className="bg-black/20 p-4 rounded-xl max-w-sm mx-auto">
+                                            <h4 className="font-bold text-sm mb-3 uppercase tracking-wider text-muted-foreground">Live Scores</h4>
+                                            <div className="space-y-2">
+                                                {leaderboard
+                                                    .sort((a, b) => b.score - a.score)
+                                                    .slice(0, 5)
+                                                    .map((entry, idx) => (
+                                                        <div key={entry.userId} className="flex justify-between items-center p-2 rounded bg-white/5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold w-5 text-sm">{idx + 1}</span>
+                                                                <span className="text-sm">Player {entry.userId.slice(0, 4)}</span>
+                                                            </div>
+                                                            <span className="font-bold text-sm">{entry.score}</span>
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Host Controls */}
+                                    <div className="pt-4 border-t border-white/10">
+                                        <Button
+                                            onClick={nextQuestion}
+                                            className="w-full md:w-auto px-8 py-3 rounded-xl shadow-lg bg-white text-black hover:bg-gray-200"
+                                        >
+                                            Next Question →
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
 
@@ -227,8 +276,40 @@ const QuizRoomPage = () => {
                                             <p className="text-sm">{feedback.explanation}</p>
                                         </div>
                                     )}
-                                    <div className="mt-6">
-                                        <p className="text-sm animate-pulse text-muted-foreground">Waiting for host to next question...</p>
+
+                                    {/* Leaderboard */}
+                                    {leaderboard.length > 0 && (
+                                        <div className="mt-8">
+                                            <h4 className="font-bold text-lg mb-4">Live Leaderboard</h4>
+                                            <div className="space-y-2 max-w-sm mx-auto">
+                                                {leaderboard
+                                                    .sort((a, b) => b.score - a.score)
+                                                    .slice(0, 5)
+                                                    .map((entry, idx) => (
+                                                        <div key={entry.userId} className="flex justify-between items-center p-3 rounded-lg bg-white/50 dark:bg-black/20">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold w-6">{idx + 1}</span>
+                                                                <span>Player {entry.userId.slice(0, 4)}</span>
+                                                            </div>
+                                                            <span className="font-bold">{entry.score}</span>
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-8">
+                                        {isHost ? (
+                                            <Button
+                                                onClick={nextQuestion}
+                                                className="w-full md:w-auto px-8 py-3 rounded-xl shadow-lg"
+                                            >
+                                                Next Question →
+                                            </Button>
+                                        ) : (
+                                            <p className="text-sm animate-pulse text-muted-foreground">Waiting for host to next question...</p>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}

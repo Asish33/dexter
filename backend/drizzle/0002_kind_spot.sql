@@ -1,0 +1,1 @@
+ALTER TABLE "quizzes" ADD COLUMN "graph_id" varchar(255);

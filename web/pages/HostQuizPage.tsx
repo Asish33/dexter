@@ -16,10 +16,10 @@ const HostQuizPage = () => {
     useEffect(() => {
         const fetchQuizzes = async () => {
             try {
-                const data = await quizService.getAllQuizzes();
+                const data: any = await quizService.getAllQuizzes();
                 // Ensure we only show quizzes created by the user (though backend should enforce this)
                 // Filter if needed, but getAllQuizzes usually returns user's quizzes or public ones
-                setQuizzes(data);
+                setQuizzes(data.quizzes || []);
             } catch (err) {
                 console.error('Failed to fetch quizzes:', err);
                 setError('Failed to load quizzes.');
@@ -46,7 +46,7 @@ const HostQuizPage = () => {
             // For MVP, let's use QuizRoomPage but maybe add 'isHost' flag content?
             // Actually, let's just show the code here or redirect to a Host Lobby.
             // Let's redirect to the same room but maybe we handle it differently later.
-            navigate(`/dashboard/quiz/${response.sessionId}`);
+            navigate(`/dashboard/quiz/${response.sessionId}`, { state: { isHost: true } });
         } catch (err: any) {
             console.error('Failed to start session:', err);
             setError(err.message || 'Failed to start quiz session.');
