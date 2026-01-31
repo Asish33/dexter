@@ -118,17 +118,14 @@ export const useQuizStore = create<QuizState>((set, get) => ({
     addFile: async (file) => {
         set({ ingestionStatus: 'loading' });
         const { sessionId } = get();
-        const formData = new FormData(); // Browser FormData
-        formData.append('file', file);
-        formData.append('document_id', sessionId);
 
         try {
-            const res = await fetch('http://localhost:8000/upload', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!res.ok) throw new Error("Upload failed");
+            // Upload to Cloudinary instead of backend
+            const { uploadToCloudinary } = await import('../utils/cloudinary');
+            const cloudinaryUrl = await uploadToCloudinary(file);
+            
+            // Log the Cloudinary URL to console
+            console.log('Cloudinary URL:', cloudinaryUrl);
 
             const fileData = {
                 name: file.name,
@@ -143,8 +140,9 @@ export const useQuizStore = create<QuizState>((set, get) => ({
             setTimeout(() => set({ ingestionStatus: 'idle' }), 2000);
 
         } catch (e) {
-            console.error(e);
+            console.error('Cloudinary upload error:', e);
             set({ ingestionStatus: 'error' });
+            alert(e instanceof Error ? e.message : 'Failed to upload file to Cloudinary');
         }
     },
 
