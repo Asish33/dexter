@@ -11,9 +11,16 @@ app = create_app()
 
 def create_constraints():
     def _constraints(tx):
+        # Drop the old one that is causing your error
+        try:
+            tx.run("DROP CONSTRAINT keyword_name_unique IF EXISTS")
+        except:
+            pass
+            
+        # Create the new improved one
         tx.run("""
-            CREATE CONSTRAINT keyword_name_unique IF NOT EXISTS
-            FOR (k:Keyword) REQUIRE k.name IS UNIQUE
+            CREATE CONSTRAINT keyword_graph_unique IF NOT EXISTS
+            FOR (k:Keyword) REQUIRE (k.name, k.graph_id) IS UNIQUE
         """)
     driver = get_driver()
     with driver.session() as session:
