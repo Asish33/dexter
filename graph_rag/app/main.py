@@ -1,10 +1,20 @@
 # app/main.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.neo4j import get_driver, close_driver
 from app.api.ingest import router as ingest_router
 from app.api.generate import router as generate_router
+
 def create_app():
-    return FastAPI()
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    return app
 
 app = create_app()
 
